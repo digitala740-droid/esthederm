@@ -79,8 +79,77 @@
   $("drop").ondrop = (e) => { e.preventDefault(); $("drop").classList.remove("over"); addFiles(e.dataTransfer.files); };
   document.addEventListener("paste", (e) => {
     const files = [...(e.clipboardData?.files || [])];
-    if (files.length && !e.target.closest(".job") && !e.target.closest("dialog")) addFiles(files);
+    if (!files.length || e.target.closest(".job") || e.target.closest("dialog")) return;
+    if (e.target.closest("#ownCard")) ownAdd(files); else addFiles(files);
   });
+
+  // ── свой пост СММщика: заголовок, текст, хештеги, фото/видео, время или «сейчас» ──
+  let own = [], ownWhen = "at";   // own: [{name, type, data, url}]
+  const ownTags = () => $("oTags").value.split(/[\s,]+/).filter(t => t.replace(/#/g, ""));
+  function ownDraw() {
+    const vid = own.some(f => f.type.startsWith("video/"));
+    $("oThumbs").innerHTML = own.map((f, i) => `<span>${f.type.startsWith("video/")
+      ? `<video src="${f.url}" muted playsinline preload="metadata"></video>` : `<img src="${f.url}" alt="">`}<i class="n">${i + 1}</i><button data-orm="${i}" aria-label="Убрать">✕</button></span>`).join("");
+    $("oAspectBox").hidden = vid;
+    if (!$("oAspect").dataset.set && P().post_aspect) { $("oAspect").value = P().post_aspect === "4:5" ? "4:5" : "1:1"; $("oAspect").dataset.set = 1; }
+    document.querySelectorAll("#oWhenSeg button").forEach(b => b.classList.toggle("on", b.dataset.w === ownWhen));
+    $("oAtBox").hidden = ownWhen !== "at";
+    $("oBtn").textContent = ownWhen === "now" ? "🚀 Опубликовать сейчас" : ownWhen === "at" ? "🗓 Запланировать" : "Сохранить в «Запланировано»";
+    const len = ($("oTitleIn").checked && $("oTitle").value.trim() ? $("oTitle").value.trim().length + 2 : 0) + $("oText").value.length
+      + ownTags().reduce((s, t) => s + t.length + 1, 0);
+    const nt = ownTags().length;
+    $("oCount").innerHTML = `<span style="color:${len > 2200 ? "var(--err)" : "inherit"}">${len} / 2200</span> · <span style="color:${nt > 30 ? "var(--err)" : "inherit"}">#${nt} / 30</span>`;
+    $("oHint").textContent = (vid ? "Видео уйдёт как Reels со своим звуком: завод подгонит его под 1080×1920 (не 9:16 — на размытом фоне). "
+      : own.length > 1 ? `Карусель из ${own.length} фото в порядке номеров. ` : "")
+      + (ownWhen === "now" ? "Пост сразу уйдёт в Instagram" : ownWhen === "at" ? "Пост выйдет в выбранное время" : "Пост ждёт в «Запланировано», дату можно поставить потом")
+      + ($("oStory").checked ? ", следом — репост в сторис." : ".") + (P().instagram ? ` Аккаунт: @${P().instagram}.` : "");
+  }
+  async function ownAdd(files) {
+    for (const f of files) {
+      const isV = f.type.startsWith("video/");
+      if (!isV && !f.type.startsWith("image/")) continue;
+      if (isV) {
+        if (f.size > 60e6) { toast(`«${f.name}» больше 60 МБ — сожмите видео`); continue; }
+        own = [];  // видео — одно, без фото
+      } else if (own.some(x => x.type.startsWith("video/"))) { toast("К видео нельзя добавить фото — уберите видео или создайте отдельный пост"); continue; }
+      if (own.length >= 10) { toast("Не больше 10 фото в карусели"); break; }
+      own.push({ name: f.name, type: f.type, url: URL.createObjectURL(f), data: await readFile(f) });
+    }
+    ownDraw();
+  }
+  $("oFile").onchange = (e) => { ownAdd([...e.target.files]); e.target.value = ""; };
+  $("oDrop").ondragover = (e) => { e.preventDefault(); $("oDrop").classList.add("over"); };
+  $("oDrop").ondragleave = () => $("oDrop").classList.remove("over");
+  $("oDrop").ondrop = (e) => { e.preventDefault(); $("oDrop").classList.remove("over"); ownAdd([...e.dataTransfer.files]); };
+  $("oThumbs").onclick = (e) => { const i = e.target.dataset.orm; if (i !== undefined) { URL.revokeObjectURL(own[+i].url); own.splice(+i, 1); ownDraw(); } };
+  $("oWhenSeg").onclick = (e) => { const b = e.target.closest("[data-w]"); if (b) { ownWhen = b.dataset.w; ownDraw(); } };
+  ["oTitle", "oText", "oTags"].forEach(id => $(id).addEventListener("input", ownDraw));
+  ["oTitleIn", "oStory"].forEach(id => $(id).addEventListener("change", ownDraw));
+  $("oBrandTags").onclick = (e) => {
+    e.preventDefault();
+    const brand = (($("oLang").value === "kz" ? P().hashtags_kz : "") || P().hashtags || "").split(/[\s,]+/).filter(Boolean);
+    const cur = ownTags();
+    $("oTags").value = [...cur, ...brand.filter(t => !cur.includes(t))].join(" ");
+    ownDraw();
+  };
+  (() => { const d = new Date(Date.now() + 3600e3); d.setMinutes(0); $("oAt").value = localInput(d); })();
+  $("oBtn").onclick = async () => {
+    $("oMsg").textContent = "";
+    if (ownWhen === "at" && !$("oAt").value) { $("oMsg").textContent = "выберите дату и время"; return; }
+    if (ownWhen === "now" && !confirm(`Опубликовать «${$("oTitle").value.trim() || "пост"}» в Instagram прямо сейчас?`)) return;
+    const b = $("oBtn"); b.disabled = true; const label = b.textContent; b.textContent = "Загружаю…";
+    try {
+      await api("/api/own", { title: $("oTitle").value, caption: $("oText").value, hashtags: $("oTags").value,
+        title_in_caption: $("oTitleIn").checked, files: own.map(f => ({ name: f.name, data: f.data })),
+        aspect: $("oAspect").value, lang: $("oLang").value, story: $("oStory").checked,
+        when: ownWhen === "now" ? "now" : ownWhen === "at" ? $("oAt").value : "" });
+      own.forEach(f => URL.revokeObjectURL(f.url));
+      own = []; $("oTitle").value = ""; $("oText").value = ""; $("oTags").value = "";
+      tab = ownWhen === "now" ? "work" : "sched";
+      toast(ownWhen === "now" ? "Пост готовится и уходит в Instagram" : "Пост в «Запланировано»"); load(true);
+    } catch (e) { $("oMsg").textContent = e.message === "Failed to fetch" ? "Завод не отвечает или файл слишком большой" : e.message; }
+    finally { b.disabled = false; b.textContent = label; ownDraw(); }
+  };
   $("createBtn").onclick = async () => {
     $("msg").textContent = "";
     const b = $("createBtn"); b.disabled = true;
@@ -285,7 +354,7 @@
       $("offline").hidden = true;
       state = await r.json();
       if (first) {
-        first = false; drawForm(); $("story").checked = P().story !== false;
+        first = false; drawForm(); $("story").checked = P().story !== false; $("oStory").checked = P().story !== false; ownDraw();
         const ic = P().icon || "🫒", nm = P().name || "";
         if (P().post_aspect) $("aspect").value = P().post_aspect;
         document.title = "Контент-завод " + nm;
