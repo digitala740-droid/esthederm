@@ -146,6 +146,8 @@
   .pick-grid .c { position: absolute; left: 4px; top: 4px; background: rgba(0,0,0,.65); color: #fff; font-size: 10.5px; padding: 1px 5px; border-radius: 5px; }
   .pick-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .pick-top input { flex: 1; min-width: 160px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--soft); color: var(--text); }
+  .thumbs video { width: 120px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; background: #000; }
+  .thumbs .n { position: absolute; left: 4px; bottom: 3px; background: rgba(0,0,0,.65); color: #fff; font-size: 10.5px; padding: 0 5px; border-radius: 5px; }
   .tag { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
 </style>
 <div class="wrap">
@@ -162,6 +164,34 @@
 
   <div class="grid">
     <aside>
+      <section class="card" id="ownCard" style="margin-bottom:16px">
+        <h2>✍ Свой пост</h2>
+        <label class="f">Заголовок<input id="oTitle" maxlength="120" autocomplete="off" placeholder="Например: Секрет ровного загара"></label>
+        <label class="f">Текст поста <span id="oCount" style="float:right"></span>
+          <textarea id="oText" rows="7" placeholder="Текст, который увидят подписчики. Абзацы и эмодзи сохранятся."></textarea></label>
+        <label class="checks" style="margin-top:-4px"><span><input type="checkbox" id="oTitleIn" checked>Заголовок — первой строкой текста</span></label>
+        <label class="f">Хештеги <a href="#" id="oBrandTags" style="float:right;color:var(--accent)">+ хештеги бренда</a>
+          <input id="oTags" autocomplete="off" placeholder="#esthederm #уходзакожей"></label>
+        <label class="drop" id="oDrop" for="oFile">📷 Фото (до 10 — карусель) или 🎬 одно видео (Reels)<br>
+          <span class="hint">нажмите, перетащите или вставьте · видео mp4/mov до 60 МБ и до 90 сек</span>
+          <input type="file" id="oFile" accept="image/*,video/mp4,video/quicktime,video/webm" multiple class="vh"></label>
+        <div class="thumbs" id="oThumbs"></div>
+        <div class="row2" style="margin-top:10px">
+          <label class="f" id="oAspectBox">Формат фото<select id="oAspect"><option value="1:1">1:1 — квадрат</option><option value="4:5">4:5 — лента</option></select></label>
+          <label class="f">Язык сторис<select id="oLang"><option value="ru">Русский</option><option value="kz">Казахский</option></select></label>
+        </div>
+        <label class="checks"><span><input type="checkbox" id="oStory" checked>Репост в сторис</span></label>
+        <div class="seg" id="oWhenSeg">
+          <button data-w="now">🚀 Сейчас</button>
+          <button data-w="at" class="on">🗓 Ко времени</button>
+          <button data-w="later">Без даты</button>
+        </div>
+        <label class="f" id="oAtBox">Дата и время публикации<input type="datetime-local" id="oAt"></label>
+        <button class="btn wide" id="oBtn">Запланировать</button>
+        <div class="msg" id="oMsg"></div>
+        <p class="hint" id="oHint"></p>
+      </section>
+
       <section class="card wk" style="margin-bottom:16px">
         <h2>🗓 Посты на неделю</h2>
         <p id="wkInfo" class="hint"></p>
@@ -179,7 +209,7 @@
       </section>
 
       <section class="card">
-        <h2 style="display:flex;justify-content:space-between;align-items:center">Новый пост вручную
+        <h2 style="display:flex;justify-content:space-between;align-items:center">🤖 Пост с Claude
           <button class="btn ghost small" id="ideasBtn" title="Claude предложит темы">💡 Идеи</button></h2>
         <div class="seg" id="kindSeg">
           <button data-kind="post" class="on">🖼 Фото-пост</button>
@@ -296,7 +326,7 @@
   } catch (e) {}
   if (!api) { try { api = (await (await fetch("api.json?" + Date.now(), { cache: "no-store" })).json()).api || ""; } catch (e) {} }
   window.CF_API = api || "https://offline.invalid";
-  const s = document.createElement("script"); s.src = "app.js?v=261125170240"; document.body.appendChild(s);
+  const s = document.createElement("script"); s.src = "app.js?v=261127163134"; document.body.appendChild(s);
 })();
 </script>
 </body>
