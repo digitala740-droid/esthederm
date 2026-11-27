@@ -84,16 +84,24 @@
   });
 
   // ── свой пост СММщика: заголовок, текст, хештеги, фото/видео, время или «сейчас» ──
-  let own = [], ownWhen = "at";   // own: [{name, type, data, url}]
+  let own = [], ownWhen = "at";   // own: [{name, type, file, url, dur}]
+  const MB = 1024 * 1024, VIDEO_MAX = 650 * MB, PHOTO_MAX = 30 * MB, VIDEO_SEC = 180, CHUNK = 20 * MB;
+  const ownAt = () => $("oDate").value && $("oTime").value ? `${$("oDate").value}T${$("oTime").value}` : "";
+  const mb = (n) => (n / MB).toFixed(n < 10 * MB ? 1 : 0) + " МБ";
+  const videoDur = (url) => new Promise((ok) => { const v = document.createElement("video"); v.preload = "metadata";
+    v.onloadedmetadata = () => ok(v.duration || 0); v.onerror = () => ok(0); v.src = url; });
   const ownTags = () => $("oTags").value.split(/[\s,]+/).filter(t => t.replace(/#/g, ""));
   function ownDraw() {
     const vid = own.some(f => f.type.startsWith("video/"));
     $("oThumbs").innerHTML = own.map((f, i) => `<span>${f.type.startsWith("video/")
-      ? `<video src="${f.url}" muted playsinline preload="metadata"></video>` : `<img src="${f.url}" alt="">`}<i class="n">${i + 1}</i><button data-orm="${i}" aria-label="Убрать">✕</button></span>`).join("");
+      ? `<video src="${f.url}" muted playsinline preload="metadata"></video>` : `<img src="${f.url}" alt="">`}<i class="n">${i + 1} · ${mb(f.file.size)}${f.dur ? " · " + Math.floor(f.dur / 60) + ":" + pad(Math.round(f.dur % 60)) : ""}</i><button data-orm="${i}" aria-label="Убрать">✕</button></span>`).join("");
     $("oAspectBox").hidden = vid;
     if (!$("oAspect").dataset.set && P().post_aspect) { $("oAspect").value = P().post_aspect === "4:5" ? "4:5" : "1:1"; $("oAspect").dataset.set = 1; }
     document.querySelectorAll("#oWhenSeg button").forEach(b => b.classList.toggle("on", b.dataset.w === ownWhen));
     $("oAtBox").hidden = ownWhen !== "at";
+    const at = ownAt(), atd = at && new Date(at);
+    $("oAtHuman").textContent = !at ? "выберите дату и время" : atd < new Date() ? "это время уже прошло" : "Выйдет: " + human(at.replace("T", " "));
+    $("oAtHuman").classList.toggle("bad", !at || atd < new Date());
     $("oBtn").textContent = ownWhen === "now" ? "🚀 Опубликовать сейчас" : ownWhen === "at" ? "🗓 Запланировать" : "Сохранить в «Запланировано»";
     const len = ($("oTitleIn").checked && $("oTitle").value.trim() ? $("oTitle").value.trim().length + 2 : 0) + $("oText").value.length
       + ownTags().reduce((s, t) => s + t.length + 1, 0);
@@ -108,12 +116,20 @@
     for (const f of files) {
       const isV = f.type.startsWith("video/");
       if (!isV && !f.type.startsWith("image/")) continue;
+      const url = URL.createObjectURL(f);
+      let dur = 0;
       if (isV) {
-        if (f.size > 60e6) { toast(`«${f.name}» больше 60 МБ — сожмите видео`); continue; }
-        own = [];  // видео — одно, без фото
-      } else if (own.some(x => x.type.startsWith("video/"))) { toast("К видео нельзя добавить фото — уберите видео или создайте отдельный пост"); continue; }
-      if (own.length >= 10) { toast("Не больше 10 фото в карусели"); break; }
-      own.push({ name: f.name, type: f.type, url: URL.createObjectURL(f), data: await readFile(f) });
+        if (f.size > VIDEO_MAX) { toast(`«${f.name}» — ${mb(f.size)}: Instagram принимает видео до 650 МБ`); URL.revokeObjectURL(url); continue; }
+        dur = await videoDur(url);
+        if (dur > VIDEO_SEC + 0.5) { toast(`«${f.name}» — ${Math.floor(dur / 60)}:${pad(Math.round(dur % 60))}: Reels не длиннее 3 минут`); URL.revokeObjectURL(url); continue; }
+        if (dur && dur < 3) { toast("Видео короче 3 секунд — Instagram такое не примет"); URL.revokeObjectURL(url); continue; }
+        own.forEach(x => URL.revokeObjectURL(x.url)); own = [];  // видео — одно, без фото
+      } else {
+        if (own.some(x => x.type.startsWith("video/"))) { toast("К видео нельзя добавить фото — уберите видео или создайте отдельный пост"); URL.revokeObjectURL(url); continue; }
+        if (f.size > PHOTO_MAX) { toast(`«${f.name}» — ${mb(f.size)}: фото до 30 МБ`); URL.revokeObjectURL(url); continue; }
+        if (own.length >= 10) { toast("Не больше 10 фото в карусели"); URL.revokeObjectURL(url); break; }
+      }
+      own.push({ name: f.name, type: f.type, file: f, url, dur });
     }
     ownDraw();
   }
@@ -132,22 +148,58 @@
     $("oTags").value = [...cur, ...brand.filter(t => !cur.includes(t))].join(" ");
     ownDraw();
   };
-  (() => { const d = new Date(Date.now() + 3600e3); d.setMinutes(0); $("oAt").value = localInput(d); })();
+  function setAt(d) { const v = localInput(d); $("oDate").value = v.slice(0, 10); $("oTime").value = v.slice(11, 16); ownDraw(); }
+  ["oDate", "oTime"].forEach(id => { $(id).addEventListener("input", ownDraw); $(id).addEventListener("change", ownDraw); });
+  $("oQuick").onclick = (e) => { const b = e.target.closest("[data-q]"); if (!b) return; e.preventDefault();
+    const [days, hm] = b.dataset.q.split("|"); const d = new Date(); d.setDate(d.getDate() + +days); d.setHours(+hm.slice(0, 2), +hm.slice(3), 0, 0); setAt(d); };
+  (() => { const d = new Date(Date.now() + 3600e3); d.setMinutes(0, 0, 0); $("oDate").min = localInput(new Date()).slice(0, 10); setAt(d); })();
+  async function uploadFile(f, onPart) {  // частями по 20 МБ: туннель не пропускает больше 100 МБ за запрос
+    const id = Array.from(crypto.getRandomValues(new Uint8Array(12)), x => x.toString(16).padStart(2, "0")).join("");
+    const n = Math.max(1, Math.ceil(f.size / CHUNK));
+    for (let i = 0; i < n; i++) {
+      let tries = 0;
+      for (;;) {
+        try {
+          const r = await fetch(`${API}/api/upload?id=${id}&i=${i}`, { method: "POST",
+            headers: { "Content-Type": "application/octet-stream", ...hdr() }, body: f.slice(i * CHUNK, (i + 1) * CHUNK) });
+          const d = await r.json().catch(() => ({}));
+          if (r.status === 401) { needLogin(); throw Object.assign(new Error("нужен вход"), { final: true }); }
+          if (!r.ok) throw Object.assign(new Error(d.error || "ошибка " + r.status), { final: r.status < 500 });
+          break;
+        } catch (err) { if (err.final || ++tries >= 3) throw err; await new Promise(ok => setTimeout(ok, 2000 * tries)); }
+      }
+      onPart((i + 1) / n);
+    }
+    return id;
+  }
   $("oBtn").onclick = async () => {
     $("oMsg").textContent = "";
-    if (ownWhen === "at" && !$("oAt").value) { $("oMsg").textContent = "выберите дату и время"; return; }
+    if (ownWhen === "at" && !ownAt()) { $("oMsg").textContent = "выберите дату и время"; return; }
+    if (ownWhen === "at" && new Date(ownAt()) < new Date()) { $("oMsg").textContent = "это время уже прошло — выберите будущее"; return; }
+    if (!$("oTitle").value.trim()) { $("oMsg").textContent = "напишите заголовок"; return; }
+    if (!$("oText").value.trim()) { $("oMsg").textContent = "напишите текст поста"; return; }
+    if (!own.length) { $("oMsg").textContent = "добавьте фото или видео"; return; }
     if (ownWhen === "now" && !confirm(`Опубликовать «${$("oTitle").value.trim() || "пост"}» в Instagram прямо сейчас?`)) return;
     const b = $("oBtn"); b.disabled = true; const label = b.textContent; b.textContent = "Загружаю…";
     try {
+      const total = own.reduce((s, f) => s + f.file.size, 0) || 1;
+      let done = 0;
+      const files = [];
+      for (const f of own) {
+        const up = await uploadFile(f.file, (part) => { b.textContent = `Загружаю ${Math.round((done + part * f.file.size) / total * 100)}%`; });
+        done += f.file.size;
+        files.push({ upload: up, name: f.name, type: f.type });
+      }
+      b.textContent = "Сохраняю…";
       await api("/api/own", { title: $("oTitle").value, caption: $("oText").value, hashtags: $("oTags").value,
-        title_in_caption: $("oTitleIn").checked, files: own.map(f => ({ name: f.name, data: f.data })),
+        title_in_caption: $("oTitleIn").checked, files,
         aspect: $("oAspect").value, lang: $("oLang").value, story: $("oStory").checked,
-        when: ownWhen === "now" ? "now" : ownWhen === "at" ? $("oAt").value : "" });
+        when: ownWhen === "now" ? "now" : ownWhen === "at" ? ownAt() : "" });
       own.forEach(f => URL.revokeObjectURL(f.url));
       own = []; $("oTitle").value = ""; $("oText").value = ""; $("oTags").value = "";
       tab = ownWhen === "now" ? "work" : "sched";
       toast(ownWhen === "now" ? "Пост готовится и уходит в Instagram" : "Пост в «Запланировано»"); load(true);
-    } catch (e) { $("oMsg").textContent = e.message === "Failed to fetch" ? "Завод не отвечает или файл слишком большой" : e.message; }
+    } catch (e) { $("oMsg").textContent = e.message === "Failed to fetch" ? "Завод не отвечает — проверьте интернет и попробуйте ещё раз" : e.message; }
     finally { b.disabled = false; b.textContent = label; ownDraw(); }
   };
   $("createBtn").onclick = async () => {
