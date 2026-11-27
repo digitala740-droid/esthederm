@@ -148,6 +148,15 @@
   .pick-top input { flex: 1; min-width: 160px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--soft); color: var(--text); }
   .thumbs video { width: 120px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; background: #000; }
   .thumbs .n { position: absolute; left: 4px; bottom: 3px; background: rgba(0,0,0,.65); color: #fff; font-size: 10.5px; padding: 0 5px; border-radius: 5px; }
+  #oAtBox { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+  #oAtBox .atrow { display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; margin-top: 4px; }
+  #oAtBox input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); color: var(--text); outline: none; }
+  #oAtBox input:focus { border-color: var(--accent); }
+  #oAtBox .quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  #oAtBox .quick button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; color: var(--text); }
+  #oAtBox .quick button:hover { border-color: var(--accent); color: var(--accent); }
+  #oAtHuman { display: block; margin-top: 6px; color: var(--text); font-weight: 600; }
+  #oAtHuman.bad { color: var(--err); }
   .tag { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
 </style>
 <div class="wrap">
@@ -173,7 +182,7 @@
         <label class="f">Хештеги <a href="#" id="oBrandTags" style="float:right;color:var(--accent)">+ хештеги бренда</a>
           <input id="oTags" autocomplete="off" placeholder="#esthederm #уходзакожей"></label>
         <label class="drop" id="oDrop" for="oFile">📷 Фото (до 10 — карусель) или 🎬 одно видео (Reels)<br>
-          <span class="hint">нажмите, перетащите или вставьте · видео mp4/mov до 60 МБ и до 90 сек</span>
+          <span class="hint">нажмите, перетащите или вставьте · видео mp4/mov до 650 МБ и до 3 минут, фото до 30 МБ</span>
           <input type="file" id="oFile" accept="image/*,video/mp4,video/quicktime,video/webm" multiple class="vh"></label>
         <div class="thumbs" id="oThumbs"></div>
         <div class="row2" style="margin-top:10px">
@@ -186,7 +195,13 @@
           <button data-w="at" class="on">🗓 Ко времени</button>
           <button data-w="later">Без даты</button>
         </div>
-        <label class="f" id="oAtBox">Дата и время публикации<input type="datetime-local" id="oAt"></label>
+        <div class="f" id="oAtBox">Дата и время публикации
+          <div class="atrow"><input type="date" id="oDate" aria-label="Дата"><input type="time" id="oTime" step="300" aria-label="Время"></div>
+          <div class="quick" id="oQuick">
+            <button data-q="0|19:00">Сегодня 19:00</button><button data-q="1|10:00">Завтра 10:00</button><button data-q="1|19:00">Завтра 19:00</button>
+          </div>
+          <span id="oAtHuman"></span>
+        </div>
         <button class="btn wide" id="oBtn">Запланировать</button>
         <div class="msg" id="oMsg"></div>
         <p class="hint" id="oHint"></p>
@@ -326,7 +341,7 @@
   } catch (e) {}
   if (!api) { try { api = (await (await fetch("api.json?" + Date.now(), { cache: "no-store" })).json()).api || ""; } catch (e) {} }
   window.CF_API = api || "https://offline.invalid";
-  const s = document.createElement("script"); s.src = "app.js?v=261127163134"; document.body.appendChild(s);
+  const s = document.createElement("script"); s.src = "app.js?v=261127165534"; document.body.appendChild(s);
 })();
 </script>
 </body>
